@@ -1,3 +1,4 @@
+library(MetamapsDB)
 library(ggvis)
 library(gridExtra)
 library(igraph)
@@ -13,7 +14,6 @@ data = data[which(!sapply(data, function(x) is.null(x)))]
 pathways = sapply(data, function(x) x$name)
 
 everythingDF = do.call(rbind,lapply(data, function(x) x$df)) %>% unique
-
 shinyServer(
   function(input, output){
     eve = reactive({
@@ -28,25 +28,25 @@ shinyServer(
           df = data[[which(pathways == pathwayID)]]
           df$df = df$df %>% filter(percentage==input$Nvar)
 
-        label = V(df$graph)$label
+        #label = V(df$graph)$label
 
-        if(input$ko==FALSE){
-            V(df$graph)$label[grep("ko:", V(df$graph)$name)] = ""
-        }
-        if(input$ko==TRUE){
-            V(df$graph)$label[grep("ko:", V(df$graph)$name)] = label[grep("ko:", V(df$graph)$name)]
-        }
-        if(input$koID==TRUE){
-            V(df$graph)$label[grep("ko:", V(df$graph)$name)] = V(df$graph)$name[grep("ko:", V(df$graph)$name)]
-        }
-        if(input$cpd==FALSE){
-            V(df$graph)$label[grep("cpd:", V(df$graph)$name)] = ""
-        }
-        V(df$graph)$label.cex=rep(input$cpdtextsize, vcount(df$graph))
-        V(df$graph)$label.cex[grep("ko", V(df$graph)$name)] = input$kotextsize
+        #if(input$ko==FALSE){
+            #V(df$graph)$label[grep("ko:", V(df$graph)$name)] = ""
+        #}
+        #if(input$ko==TRUE){
+            #V(df$graph)$label[grep("ko:", V(df$graph)$name)] = label[grep("ko:", V(df$graph)$name)]
+        #}
+        #if(input$koID==TRUE){
+            #V(df$graph)$label[grep("ko:", V(df$graph)$name)] = V(df$graph)$name[grep("ko:", V(df$graph)$name)]
+        #}
+        #if(input$cpd==FALSE){
+            #V(df$graph)$label[grep("cpd:", V(df$graph)$name)] = ""
+        #}
+        #V(df$graph)$label.cex=rep(input$cpdtextsize, vcount(df$graph))
+        #V(df$graph)$label.cex[grep("ko", V(df$graph)$name)] = input$kotextsize
 
-        V(df$graph)$size=rep(input$cpdsize, vcount(df$graph))
-        V(df$graph)$size[grep("ko", V(df$graph)$name)] = input$kosize
+        #V(df$graph)$size=rep(input$cpdsize, vcount(df$graph))
+        #V(df$graph)$size[grep("ko", V(df$graph)$name)] = input$kosize
           df
     })
 
@@ -120,25 +120,99 @@ shinyServer(
     #ggvis
     ##################################################
 
-    vis = reactive({
-            path  = df()$df                             %>%
-                    select(-percentage, -nPerc, -X)     %>%
-                    gather(type, size, -ko, -totalMRNA)
-            path2 = df()$df %>%
-                    select(ko, contigsRequired)         %>%
-                    unique
-            pathDone = merge(path, path2, all=T)
-            pathDone$id = 1:nrow(pathDone)
-            #print(pathDone)
-            lb = linked_brush(keys = 1:nrow(pathDone), "red")
-            pathDone %>%
-            ggvis(x=~totalMRNA, y=~contigsRequired, fill=~ ko, size=~size, size.brush:= 1000)                                                                        %>%
-            layer_points(opacity= ~type)                           %>%
-            scale_numeric("size", range=c(0,1000))                                                                                                                                %>%
-            scale_ordinal("opacity", range=c(1,0.2))                                                                                                                                %>%
-            add_tooltip(function(data){paste0("Expression: ", data$totalMRNA, "<br>", "ContigsRequired: ",filter(pathDone[which(pathDone$ko == data$ko),], type == 'contigsRequired')$size,  "<br>","TotalNum: ",filter(pathDone[which(pathDone$ko == data$ko),], type == 'totalNum')$size, "<br>", "KO: ", data$ko)}, "hover") %>%
-            hide_legend("fill")                                                                                                                                                   %>%
-            lb$input()
-        })
-    vis %>% bind_shiny("ggvis", "plot_ui")
+
+    pathDone = reactive({
+        path  = df()$df                     %>%
+        select(-percentage, -nPerc, -X)     %>%
+        gather(type, size, -ko, -totalMRNA)
+        path2 = df()$df                     %>%
+        select(ko, contigsRequired)         %>%
+        unique
+        pathDone = merge(path, path2, all=T)
+        pathDone$id = 1:nrow(pathDone)
+        pathDone
+    })
+
+    lb = linked_brush(keys = 1:nrow(pathDone()), "red")
+
+    pathDone                                                                                                                                                                                                                                                                                                            %>% 
+    #ggvis automatically takes the reactive function; so no need to pass it double brackets ()
+    ggvis(x=~totalMRNA, y=~contigsRequired, stroke.brush:="red", fill=~ ko, size=~size, size.brush:= 1000)                                                                                                                                                                                                              %>%
+    layer_points(opacity= ~type)                                                                                                                                                                                                                                                                                        %>%
+    scale_numeric("size", range=c(0,1000))                                                                                                                                                                                                                                                                              %>%
+    scale_ordinal("opacity", range=c(1,0.2))                                                                                                                                                                                                                                                                            %>%
+    add_tooltip(function(data){paste0("Expression: ", data$totalMRNA, "<br>", "ContigsRequired: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'contigsRequired')$size,  "<br>","TotalNum: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'totalNum')$size, "<br>", "KO: ", data$ko)}, "hover") %>%
+    hide_legend("fill")                                                                                                                                                                                                                                                                                                 %>%
+    lb$input() %>%
+    bind_shiny("ggvis1")
+
+    selected = lb$selected
+
+    graphObj = reactive({
+         ig2ggvis(df()$graph)
+    })
+
+    all_values <- function(x) {
+    if(is.null(x)) return(NULL)
+    paste0(names(x), ": ", format(x), collapse = "<br />")
+    }
+
+    graphHighlight = reactive({
+        cat(
+            as.character(graphObj()[which(graphObj()$name %in% gsub("^","ko:", unique(pathDone()[selected(), ]$ko))),]$name)
+            )
+        graphObj()[graphObj()$name %in% gsub("^","ko:", unique(pathDone()[selected(), ]$ko)),]
+    })
+
+base = graphObj %>%
+            ggvis(~x, ~y)                                                                                                                                                %>%
+            group_by(row)                                                                                                                                                           %>%
+            layer_paths()                                                                                                                                                           %>%
+            layer_points(size= ~type, fill=~type)                                                                                                                                   %>%
+            add_axis("x", title = "", properties = axis_props(axis = list(strokeWidth = 0), grid = list(strokeWidth = 0),ticks = list(strokeWidth = 0), labels = list(fontSize=0))) %>%
+            add_axis("y", title = "", properties = axis_props(axis = list(strokeWidth = 0), grid = list(strokeWidth = 0),ticks = list(strokeWidth = 0), labels = list(fontSize=0))) %>%
+            scale_ordinal("size", range=c(20,100)) %>%
+            scale_ordinal("fill", range=c("grey","red")) %>%
+            add_data(graphHighlight)                                      %>%   #same here ggvis takes the reactive directly
+            layer_points(size:=1000, fill:="yellow")                          %>%
+            add_tooltip(all_values, "hover") %>%
+            set_options(width = 1000, height = 1000) #padding = padding(20, 20, 20, 20))
+
+       reactive({
+            if(input$koShow){
+           if(input$koID){
+               base_layer1 = base %>% layer_text(data=subset(graphObj(),type == 'ko'),text:=~name, fontSize:= input$kotextsize)
+                if(input$cpdShow){
+                    if(input$cpd){
+                        base_layer1 %>% layer_text(data=subset(graphObj(),type == 'cpd'),text:=~name, fontSize:= input$cpdtextsize)
+                    }else{
+                        base_layer1 %>% layer_text(data=subset(graphObj(),type == 'cpd'),text:=~label, fontSize:= input$cpdtextsize)
+                    }
+                }else{base_layer1}
+            }else{
+                base_layer1 = base %>% layer_text(data=subset(graphObj(),type == 'ko'),text:=~label, fontSize:=input$kotextsize)
+                if(input$cpdShow){
+                    if(input$cpd){
+                        base_layer1 %>% layer_text(data=subset(graphObj(),type == 'cpd'),text:=~name, fontSize:= input$cpdtextsize)
+                    }else{
+                        base_layer1 %>% layer_text(data=subset(graphObj(),type == 'cpd'),text:=~label, fontSize:= input$cpdtextsize)
+                    }
+                }else{base_layer1}
+           }
+            }else{base}
+       }) %>% bind_shiny("ggvis2")
+#TODO: the graph brushing stops working at pathK01100, not sure why, maybe too many datapoints
+#else{
+    #reactive({
+        #baseG %>%
+        #layer_text(data=subset(graphObj(),type == 'ko'),text:=~label, fontSize:=input$kotextsize)
+    #}) %>%
+    #bind_shiny("ggvis2")
+#}
+        #layer_text(data=subset(graphObj(),type == 'cpd'),text:=~name, fontSize:= input$cpdtextsize) %>%
+                #add_tooltip(function(data){
+                    #paste0(
+                    #"ID: ", graphObj()[graphObj()$id == data$id,]$name, "<br>",
+                    #"label: ", graphObj()[graphObj()$id == data$id,]$label)
+                #}) %>%
   })
