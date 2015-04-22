@@ -7,27 +7,33 @@ library(tidyr)
 library(dplyr)
 library(shiny)
 theme_set(theme_bw())
+
 load("pathway.rda")
 load("graph_prototype.rda")
 
-data = data[which(!sapply(data, function(x) is.null(x)))]
-pathways = sapply(data, function(x) x$name)
+data          =  data[which(!sapply(data, function(x) is.null(x)))]
+pathways      =  sapply(data, function(x) x$name)
+everythingDF  =  do.call(rbind,lapply(data, function(x) x$df)) %>% unique
 
-everythingDF = do.call(rbind,lapply(data, function(x) x$df)) %>% unique
+all_values <- function(x) {
+if(is.null(x)) return(NULL)
+paste0(names(x), ": ", format(x), collapse = "<br />")
+}
+
 shinyServer(
   function(input, output){
-    eve = reactive({
-      everythingDF %>% filter(percentage==input$Nvar)
-    })
     output$SelectedPathway = renderText({
          pathwayID = unlist(strsplit(input$pathwayID, ": "))[2]
+    })
+
+    eve = reactive({
+      everythingDF %>% filter(percentage==input$Nvar)
     })
 
     df = reactive({
          pathwayID = unlist(strsplit(input$pathwayID, ": "))[1]
           df = data[[which(pathways == pathwayID)]]
           df$df = df$df %>% filter(percentage==input$Nvar)
-
         #label = V(df$graph)$label
 
         #if(input$ko==FALSE){
@@ -49,8 +55,6 @@ shinyServer(
         #V(df$graph)$size[grep("ko", V(df$graph)$name)] = input$kosize
           df
     })
-
-
     #bar = reactive({
         #pathwayID = unlist(strsplit(input$pathwayID, ": "))[1]
         #df = data[[which(pathways == pathwayID)]]
@@ -61,17 +65,18 @@ shinyServer(
         #mutate(color=paste(ko, type, sep="_"))
         #bar
     #})
+
     ##################################################
-    #Graph
+    #Graph (Igraph Plot)
     ##################################################
-    output$graphObj  = renderPlot({
-        plot(df()$graph)
-      },
-      height = 1000,
-      width = 1000
-    )
+    #output$graphObj  = renderPlot({
+        #plot(df()$graph)
+      #},
+      #height = 1000,
+      #width = 1000
+    #)
     ##################################################
-    #Plot
+    #Summary Plot:: All KOs
     ##################################################
     output$summary = renderPlot({
 #        p0 = ggplot(df()$df,aes(totalMRNA, contigsRequired))+
@@ -91,20 +96,25 @@ shinyServer(
                 #theme(axis.text.x=element_text(angle=90))+
                 #scale_alpha_discrete(labels=c("Required for NXX", "Total number of contigs"))
                 #ggtitle("")
-
-        raw =   ggplot(eve(), aes(x=contigsRequired, y=totalMRNA))+
-                geom_point()+
+        raw =   ggplot(eve(), aes(x=contigsRequired, y=totalMRNA)) +
+                geom_point(aes(color=readType), alpha = 0.7)                     +
+                scale_color_manual(values=c("grey", "black"))    +
                 ggtitle("NXX against expression (All KOs)")
+
         pathwayType = mapply(function(type, colorDot){
+
                 KOI = unique(subset(newPath, cat.type == type)$ko)
                 doi = filter(eve(), ko %in% KOI)
-                ggplot(doi,aes(y=contigsRequired, x=totalMRNA)) +
-                    geom_point(color=colorDot)+
+
+                ggplot(doi,aes(y=contigsRequired, x=totalMRNA))     +
+                    geom_point(aes(color=readType), alpha=0.7)      +
+                    scale_color_manual(values=c(colorDot, "black")) +
                     ggtitle(sprintf("%s", type))
         }, SIMPLIFY=FALSE,
-        type     =  unique(newPath$cat.type),
-        colorDot =  c("#e41a1c","#377eb8","#4daf4a","#984ea3")
+            type     =  unique(newPath$cat.type),
+            colorDot =  c("#e41a1c","#377eb8","#4daf4a","#984ea3")
         )
+
         pathwayType$raw = raw
         do.call(grid.arrange,c(pathwayType, list(nrow=3)))
       })
@@ -120,28 +130,35 @@ shinyServer(
     #ggvis
     ##################################################
 
-
     pathDone = reactive({
-        path  = df()$df                     %>%
-        select(-percentage, -nPerc, -X)     %>%
+        #path0 = data[[1]]$df %>% filter(percentage == 0.8)
+        path  = df()$df                               %>%
+        #path = path0                                          %>%
+        filter(readType == input$scatter)        %>%
+        select(-percentage, -nPerc, -X, -readType)               %>%
         gather(type, size, -ko, -totalMRNA)
-        path2 = df()$df                     %>%
-        select(ko, contigsRequired)         %>%
+
+        path2 = df()$df                       %>%
+        #path2 = path0                                  %>%
+        filter(readType == input$scatter)        %>%
+        select(ko, contigsRequired) %>%
         unique
+
         pathDone = merge(path, path2, all=T)
         pathDone$id = 1:nrow(pathDone)
-        pathDone
+        pathDone 
     })
 
     lb = linked_brush(keys = 1:nrow(pathDone()), "red")
-
+    #TODO: need to separate gDNA and cDNA (and i need to know how much mRNA was actually attached to those contigs; second thought, will probably have to dig upstream again ... SIGH
     pathDone                                                                                                                                                                                                                                                                                                            %>% 
-    #ggvis automatically takes the reactive function; so no need to pass it double brackets ()
+#    #ggvis automatically takes the reactive function; so no need to pass it double brackets ()
     ggvis(x=~totalMRNA, y=~contigsRequired, stroke.brush:="red", fill=~ ko, size=~size, size.brush:= 1000)                                                                                                                                                                                                              %>%
     layer_points(opacity= ~type)                                                                                                                                                                                                                                                                                        %>%
     scale_numeric("size", range=c(0,1000))                                                                                                                                                                                                                                                                              %>%
     scale_ordinal("opacity", range=c(1,0.2))                                                                                                                                                                                                                                                                            %>%
     add_tooltip(function(data){paste0("Expression: ", data$totalMRNA, "<br>", "ContigsRequired: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'contigsRequired')$size,  "<br>","TotalNum: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'totalNum')$size, "<br>", "KO: ", data$ko)}, "hover") %>%
+    add_axis("x", title = "Total Mappable Reads") %>%
     hide_legend("fill")                                                                                                                                                                                                                                                                                                 %>%
     lb$input() %>%
     bind_shiny("ggvis1")
@@ -152,15 +169,10 @@ shinyServer(
          ig2ggvis(df()$graph)
     })
 
-    all_values <- function(x) {
-    if(is.null(x)) return(NULL)
-    paste0(names(x), ": ", format(x), collapse = "<br />")
-    }
-
     graphHighlight = reactive({
-        cat(
-            as.character(graphObj()[which(graphObj()$name %in% gsub("^","ko:", unique(pathDone()[selected(), ]$ko))),]$name)
-            )
+        #cat(
+            #as.character(graphObj()[which(graphObj()$name %in% gsub("^","ko:", unique(pathDone()[selected(), ]$ko))),]$name)
+            #)
         graphObj()[graphObj()$name %in% gsub("^","ko:", unique(pathDone()[selected(), ]$ko)),]
     })
 
@@ -202,6 +214,8 @@ base = graphObj %>%
             }else{base}
        }) %>% bind_shiny("ggvis2")
 #TODO: the graph brushing stops working at pathK01100, not sure why, maybe too many datapoints
+
+
 #else{
     #reactive({
         #baseG %>%

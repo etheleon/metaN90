@@ -3,7 +3,6 @@ library(shiny)
 library(ggvis)
 load("graph_prototype.rda")
 pathwayChoice = do.call(c,sapply(data, function(x) paste(x$name, x$fullName, sep=": ")))
-
 shinyUI(pageWithSidebar(
     headerPanel("Metabolic"),
     sidebarPanel(
@@ -18,6 +17,13 @@ shinyUI(pageWithSidebar(
         sliderInput('cpdtextsize', 'Cpd label size', value = 6, min=6, max=15, step=0.1),
         #sliderInput('kosize', 'KO size', value=4, min=0.1, max=10, step=0.5),
         #sliderInput('cpdsize', 'Cpd size', value = 0.1, min=0.1, max=10, step=0.1),
+        selectInput("scatter", 
+            label = "Choose gDNA or cDNA for scatter plot",
+            choices = list(
+                        "gDNA" = "gDNA",
+                        "cDNA" = "cDNA"
+                        ),
+            selected = "cDNA"),
         selectInput('Nvar', label=h4('Select NXX for table'), seq(0.1,0.95,0.05), selected=0.9),
         uiOutput("plot_ui"),
 width=2
@@ -26,12 +32,11 @@ width=2
     ###########
               h1(textOutput("SelectedPathway")),
               tabsetPanel(
-
                           tabPanel("NXX",
 
 fluidRow(
-      column(12,ggvisOutput("ggvis1")),
-      column(12,ggvisOutput("ggvis2"))
+      column(5,ggvisOutput("ggvis1")),
+      column(5,ggvisOutput("ggvis2"))
 )
                                    #div(class = "span4", ggvisOutput("ggvis1"), width=600),
                                    #div(class = "span4", ggvisOutput("ggvis2"), width=600), width=2000
