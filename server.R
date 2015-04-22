@@ -10,7 +10,7 @@ theme_set(theme_bw())
 
 load("pathway.rda")
 load("graph_prototype.rda")
-
+koDef$ko.ko = gsub("^ko:", "",koDef$ko.ko)
 data          =  data[which(!sapply(data, function(x) is.null(x)))]
 pathways      =  sapply(data, function(x) x$name)
 everythingDF  =  do.call(rbind,lapply(data, function(x) x$df)) %>% unique
@@ -146,19 +146,32 @@ shinyServer(
 
         pathDone = merge(path, path2, all=T)
         pathDone$id = 1:nrow(pathDone)
-        pathDone 
+        merge(pathDone, koDef, all.x=T, by.x="ko", by.y="ko.ko")
     })
 
     lb = linked_brush(keys = 1:nrow(pathDone()), "red")
     #TODO: need to separate gDNA and cDNA (and i need to know how much mRNA was actually attached to those contigs; second thought, will probably have to dig upstream again ... SIGH
     pathDone                                                                                                                                                                                                                                                                                                            %>% 
 #    #ggvis automatically takes the reactive function; so no need to pass it double brackets ()
-    ggvis(x=~totalMRNA, y=~contigsRequired, stroke.brush:="red", fill=~ ko, size=~size, size.brush:= 1000)                                                                                                                                                                                                              %>%
-    layer_points(opacity= ~type)                                                                                                                                                                                                                                                                                        %>%
+    ggvis(x=~totalMRNA, y=~contigsRequired, stroke.brush:="red", fill=~ko)                                                                                                                                                                                                              %>%
+    layer_points(opacity= ~type, size=~size,size.brush:= 1000)                                                                                                                                                                                                                                                                                        %>%
     scale_numeric("size", range=c(0,1000))                                                                                                                                                                                                                                                                              %>%
     scale_ordinal("opacity", range=c(1,0.2))                                                                                                                                                                                                                                                                            %>%
-    add_tooltip(function(data){paste0("Expression: ", data$totalMRNA, "<br>", "ContigsRequired: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'contigsRequired')$size,  "<br>","TotalNum: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'totalNum')$size, "<br>", "KO: ", data$ko)}, "hover") %>%
-    add_axis("x", title = "Total Mappable Reads") %>%
+    add_tooltip(function(data){paste0(
+        "Expression: ", data$totalMRNA, "<br>",
+        "ContigsRequired: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'contigsRequired')$size,  "<br>",
+        "TotalNum: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'totalNum')$size, "<br>",
+        "KO: ", data$ko, "<br>",
+        "Name: ", pathDone()[which(pathDone()$ko == data$ko),]$ko.definition)
+                }, "click") %>%
+    add_tooltip(function(data){paste0(
+        "Expression: ", data$totalMRNA, "<br>",
+        "ContigsRequired: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'contigsRequired')$size,  "<br>",
+        "TotalNum: ",filter(pathDone()[which(pathDone()$ko == data$ko),], type == 'totalNum')$size, "<br>",
+        "KO: ", data$ko, "<br>",
+        "Name: ", pathDone()[which(pathDone()$ko == data$ko),]$ko.definition)
+                }, "hover") %>%
+add_axis("x", title = "Total Mappable Reads") %>%
     hide_legend("fill")                                                                                                                                                                                                                                                                                                 %>%
     lb$input() %>%
     bind_shiny("ggvis1")
