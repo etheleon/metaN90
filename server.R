@@ -201,7 +201,7 @@ base = graphObj %>%
             add_data(graphHighlight)                                      %>%   #same here ggvis takes the reactive directly
             layer_points(size:=1000, fill:="yellow")                          %>%
             add_tooltip(all_values, "hover") %>%
-            set_options(width = 1000, height = 1000) #padding = padding(20, 20, 20, 20))
+            set_options(width = 500, height = 500) #padding = padding(20, 20, 20, 20))
 
        reactive({
             if(input$koShow){
